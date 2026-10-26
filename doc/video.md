@@ -350,7 +350,10 @@ Hub. Neither that APK nor any Meta native binary is included in scrcpy. The smal
 ARM64 FOV reader is independently implemented and loads the headset's runtime.
 Tested on Quest 3, firmware `52433670036000520`, casting APK `2.0.0.0.7440`, capture
 service version 10. Unsupported service versions fail explicitly. If the service
-is not yet published, initialize headset casting first and retry.
+is not yet published, scrcpy starts the headset's built-in capture broker and
+waits up to five seconds for publication. This does not start a headset recording.
+If initialization fails, start casting once from the headset or Meta Quest
+Developer Hub, stop it, then retry scrcpy.
 
 Close other headset casting and recording sessions before starting. This firmware
 has one global capture output; its stop API accepts a session ID but does not

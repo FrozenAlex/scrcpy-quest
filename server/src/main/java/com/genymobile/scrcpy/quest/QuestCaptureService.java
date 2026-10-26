@@ -1,10 +1,13 @@
 package com.genymobile.scrcpy.quest;
 
+import com.genymobile.scrcpy.util.Ln;
+
 import android.annotation.TargetApi;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.os.IBinder;
 import android.os.Parcel;
+import android.os.SystemClock;
 import android.view.Surface;
 
 import java.io.IOException;
@@ -17,6 +20,10 @@ import java.util.concurrent.TimeUnit;
 final class QuestCaptureService {
     private static final String DESCRIPTOR = "com.oculus.aidl.IScreenCaptureService";
     private final IBinder binder;
+
+    interface Initializer {
+        void start() throws IOException;
+    }
 
     private static <T> T bounded(Callable<T> operation) throws IOException {
         FutureTask<T> task = new FutureTask<>(operation);
@@ -38,18 +45,40 @@ final class QuestCaptureService {
     }
 
     private static IBinder findService() throws IOException {
-        return bounded(() -> {
+        return findService(() -> {
             Object manager = Class.forName("android.app.ActivityManagerNative").getMethod("getDefault").invoke(null);
             Intent intent = new Intent().setComponent(new ComponentName("com.oculus.systemdriver", "com.oculus.vrapi.ScreenCaptureService"));
             return (IBinder) manager.getClass().getMethod("peekService", Intent.class, String.class, String.class)
                     .invoke(manager, intent, null, "com.android.shell");
-        });
+        }, () -> QuestCommands.command("am", "startservice", "-n", "com.oculus.metacam/.capture.CaptureService"));
+    }
+
+    static IBinder findService(Callable<IBinder> lookup, Initializer initializer) throws IOException {
+        IBinder service = bounded(lookup);
+        if (service != null) {
+            return service;
+        }
+
+        // Shell app_process cannot bind an Android service. The firmware's own
+        // capture broker binds it on startup, without requesting a recording.
+        Ln.i("Initializing Quest capture service");
+        initializer.start();
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        do {
+            service = bounded(lookup);
+            if (service != null) {
+                return service;
+            }
+            SystemClock.sleep(100);
+        } while (SystemClock.uptimeMillis() < deadline);
+        return null;
     }
 
     QuestCaptureService(IBinder binder) throws IOException {
         this.binder = binder;
         if (binder == null) {
-            throw new IOException("Quest capture service is not published; initialize casting on the headset and retry");
+            throw new IOException("Quest capture service is not published; start casting once from the headset or Meta Quest Developer Hub, "
+                    + "stop casting, then retry");
         }
         int version = bounded(() -> {
             Parcel request = Parcel.obtain();

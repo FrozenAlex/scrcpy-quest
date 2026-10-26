@@ -70,6 +70,7 @@ compile a separate test jar; no test classes enter the production server:
 
 ```sh
 python server/scripts/test-quest-device.py binder
+python server/scripts/test-quest-device.py service
 python server/scripts/test-quest-device.py partial-failure
 python server/scripts/test-quest-device.py encoder-failure
 python server/scripts/test-quest-device.py no-frames
@@ -202,3 +203,30 @@ Use `--playback --check-window --server-loss-only` with the reconnect device tes
 to verify native window identity and geometry on Windows. Add `--fullscreen` to
 exercise fullscreen retention, or `--close-on-retry` to close the retained window
 during the reconnect delay and verify that the client exits successfully.
+
+## Capture service initialization (2026-10-26)
+
+On the same Quest 3 and firmware, cinematic startup failed while the headset was
+awake because `ScreenCaptureService` had no published Binder. Starting the Meta
+casting APK with either value of `use_openxr`, or starting the runtime service
+directly, did not publish it. A direct bind from shell `app_process` was rejected
+because it has no registered Android application process.
+
+Starting `com.oculus.metacam/.capture.CaptureService` without an action made the
+firmware's capture broker bind and publish the runtime service. The existing
+`--reconnect` session then resumed, applied `[57, 57, 44, 55]`, and the user
+confirmed video was visible in the existing window. No headset recording was
+requested. The diagnostic direct start of the runtime service was undone; the
+broker's binding kept capture available.
+
+Scrcpy now starts that broker only when the initial service lookup is empty,
+then polls for up to five seconds. Protocol validation still rejects versions
+other than 10. Debug/release builds, all 62 JUnit tests, Checkstyle, and Android
+lint passed. On-device tests passed all seven Binder contract cases and four
+initialization cases: an already available service, delayed publication after
+one initialization, publication timeout, and broker startup failure. The new
+`service` test also verified the live protocol version without starting capture.
+
+The updated cold-start control flow was tested with injected service lookups;
+the real missing-service recovery above used the same broker-start command.
+The user's recovered stream was kept running during build and test validation.

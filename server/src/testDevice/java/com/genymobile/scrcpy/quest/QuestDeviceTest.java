@@ -98,6 +98,25 @@ public final class QuestDeviceTest {
         expectFailure(() -> new QuestCaptureService(new Service(10, 2)).start(null, "test", 60), "Malformed");
         expectFailure(() -> new QuestCaptureService(new Service(10, 4)).start(null, "test", 60), "DeadObjectException");
         System.out.println("PASS: seven Binder contract/error cases");
+
+        Service available = new Service(10, 0);
+        int[] starts = {0};
+        if (QuestCaptureService.findService(() -> available, () -> ++starts[0]) != available || starts[0] != 0) {
+            throw new AssertionError("An available capture service must not restart the broker");
+        }
+        int[] lookups = {0};
+        if (QuestCaptureService.findService(() -> ++lookups[0] < 4 ? null : available, () -> ++starts[0]) != available
+                || starts[0] != 1) {
+            throw new AssertionError("Cold startup must initialize once and wait for service publication");
+        }
+        expectFailure(() -> new QuestCaptureService(QuestCaptureService.findService(() -> null, () -> ++starts[0])), "not published");
+        if (starts[0] != 2) {
+            throw new AssertionError("An unavailable capture service must not repeatedly restart the broker");
+        }
+        expectFailure(() -> QuestCaptureService.findService(() -> null, () -> {
+            throw new IOException("injected broker startup failure");
+        }), "injected broker startup failure");
+        System.out.println("PASS: four capture service initialization cases");
     }
 
     private static void encoderFailure(boolean noFrames) throws Exception {
@@ -169,6 +188,9 @@ public final class QuestDeviceTest {
         Workarounds.apply();
         if (args.length == 0) {
             binderTests();
+        } else if ("service".equals(args[0])) {
+            new QuestCaptureService();
+            System.out.println("PASS: firmware capture service available with protocol version 10");
         } else if ("encoder-failure".equals(args[0]) || "no-frames".equals(args[0])) {
             encoderFailure("no-frames".equals(args[0]));
         } else if ("read".equals(args[0])) {

@@ -14,7 +14,7 @@ import subprocess
 import time
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('mode', choices=['binder', 'read', 'partial-failure', 'encoder-failure', 'no-frames', 'restart', 'kill'])
+parser.add_argument('mode', choices=['binder', 'service', 'read', 'partial-failure', 'encoder-failure', 'no-frames', 'restart', 'kill'])
 parser.add_argument('--adb', default=os.environ.get('ADB', 'adb'))
 parser.add_argument('--sdk', default=os.environ.get('ANDROID_HOME'))
 parser.add_argument('--java-home', default=os.environ.get('JAVA_HOME'))
@@ -78,7 +78,7 @@ adb('push', str(build / 'outputs/apk/debug/server-debug.apk'), remote_server)
 adb('push', str(output / 'quest-tests.jar'), remote_tests)
 
 try:
-    if args.mode in ('binder', 'read', 'partial-failure', 'encoder-failure', 'no-frames'):
+    if args.mode in ('binder', 'service', 'read', 'partial-failure', 'encoder-failure', 'no-frames'):
         result = test('' if args.mode == 'binder' else args.mode)
         (output / (args.mode + '.log')).write_text(result)
         print(result, flush=True)
